@@ -1723,7 +1723,7 @@ async function renderReader(){
     `<button class="ib" id="tocb" title="Оглавление">${ICON.list}<span class="lbl">Оглавление</span></button>
      <button class="ib" id="setb" title="Шрифт и тема">${ICON.aa}</button>`) +
     `<main class="reader"><div class="loading">Открываю книгу…</div></main>`;
-  $("#home").onclick = ()=>go({name:"home"});
+  $("#home").onclick = ()=>{ store.set("last", null); go({name:"home"}); };
   $("#setb").onclick = toggleSettings;
   let book;
   try { book = await loadBook(view.book); } catch(e){ $(".reader").innerHTML = `<div class="loading">Книга не загрузилась. Обновите страницу.</div>`; return; }
@@ -1796,6 +1796,7 @@ function savePos(){
   const pct = (before + c.len*chapterFrac()) / curBook.total;
   const pos = {ch:i, y:Math.round(y*1000)/1000, pct:Math.round(pct*1000)/1000, chTitle:c.title, at:Date.now()};
   store.set("pos:"+view.book, pos);
+  store.set("last", view.book);
   syncProgress(view.book, pos);
 }
 window.addEventListener("scroll", ()=>{
@@ -2032,7 +2033,7 @@ function renderVideo(){
   $("#home").onclick=()=>go({name:"home"});
 }
 
-render();
+(function(){ const lb = store.get("last", null); if (lb && BOOKS.some(x=>x.id===lb) && store.get("pos:"+lb,null)) openBook(lb); else render(); })();
 </script>
 
 </body>
