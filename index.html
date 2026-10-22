@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Библиотека гештальт-терапевта: книги Перлза с картинками к главам и объяснением трудных слов.">
-<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}#page p.speaking,#page h2.speaking{background:var(--accent-soft);border-radius:6px;box-shadow:0 0 0 6px var(--accent-soft)}
+#ttsb.on{color:var(--accent);border-color:currentColor}
+.ttsbar{position:fixed;left:50%;bottom:max(16px, env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 6px;border-radius:999px;background:var(--ink);color:var(--paper);box-shadow:0 6px 24px rgba(0,0,0,.25);font:500 14px/1 system-ui,-apple-system,sans-serif;max-width:calc(100vw - 32px)}
+.ttsbar button{border:0;background:none;color:inherit;cursor:pointer;height:38px;min-width:38px;border-radius:999px;font:inherit}
+.ttsbar .tt-play{background:var(--paper);color:var(--ink);font-size:13px;letter-spacing:-1px}
+.ttsbar .tt-lbl{padding:0 6px;white-space:nowrap;opacity:.85}
+.ttsbar .tt-rate{padding:0 10px;border:1px solid color-mix(in srgb, currentColor 35%, transparent)}
+.ttsbar .tt-x{opacity:.7}
+</style>
 </head>
 <body>
 <title>Библиотека гештальт-терапевта</title>
@@ -1599,7 +1607,7 @@ function toast(msg){ const t=h(`<div class="modal" style="top:auto;bottom:20px;t
 /* ---------- router ---------- */
 const app = $("#app");
 let view = {name:"home"};
-function go(v){ view = v; closeDef(); render(); window.scrollTo(0, v.scroll||0); }
+function go(v){ if (v.name!=="read" && typeof ttsStop==="function" && TTS.on) ttsStop(); view = v; closeDef(); render(); window.scrollTo(0, v.scroll||0); }
 
 function topbar(title, sub, left, right){
   return `<div class="bar"><div class="bar-in">${left}<div class="where"><b>${title}</b>${sub?`<span>${sub}</span>`:""}</div>${right}</div><div class="progress"><i id="prog"></i></div></div>`;
@@ -1716,11 +1724,111 @@ async function openBook(id, ch){
 
 /* ---------- reader ---------- */
 let saveTimer=null, curBook=null;
+/* ---------- Слушать (озвучка голосом устройства) ---------- */
+const TTS = { on:false, paused:false, k:-1, parts:[], pi:0, rate: store.get("ttsRate", 1), voice:null, ka:null, auto:false };
+const ttsOK = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+function ttsVoice(){
+  const vs = speechSynthesis.getVoices().filter(v=>/^ru/i.test(v.lang));
+  const pref = [/natural|neural|online/i, /milena|милена/i, /google/i, /yuri|katya|irina|pavel|svetlana|dariya/i];
+  for (const r of pref){ const v = vs.find(v=>r.test(v.name)); if (v) return v; }
+  return vs[0] || null;
+}
+if (ttsOK) speechSynthesis.onvoiceschanged = ()=>{ TTS.voice = ttsVoice(); };
+function ttsParas(){ return [...document.querySelectorAll("#page > p:not(.eyebrow), #page > h2.ch")]; }
+function ttsSplit(t){
+  const out = []; let cur = "";
+  (t.match(/[^.!?…]+[.!?…»"]*\s*/g) || [t]).forEach(s=>{
+    if ((cur + s).length > 220 && cur){ out.push(cur); cur = ""; }
+    cur += s;
+    while (cur.length > 300){ const cut = cur.lastIndexOf(" ", 260) > 80 ? cur.lastIndexOf(" ", 260) : 260; out.push(cur.slice(0,cut)); cur = cur.slice(cut); }
+  });
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+function ttsStartIndex(){
+  const ps = ttsParas(), top = window.scrollY + 70;
+  const k = ps.findIndex(p=> p.offsetTop + p.offsetHeight > top + 10);
+  return Math.max(0, k);
+}
+function ttsMark(){
+  document.querySelectorAll("#page .speaking").forEach(n=>n.classList.remove("speaking"));
+  const p = ttsParas()[TTS.k]; if (!p) return;
+  p.classList.add("speaking");
+  const r = p.getBoundingClientRect();
+  if (r.top < 70 || r.top > window.innerHeight*0.55) window.scrollTo({top: window.scrollY + r.top - 90, behavior:"smooth"});
+}
+function ttsSpeakNext(){
+  if (!TTS.on || TTS.paused) return;
+  if (TTS.pi >= TTS.parts.length){
+    TTS.k++;
+    const ps = ttsParas();
+    if (TTS.k >= ps.length){                       // глава закончилась → следующая
+      if (curBook && view.ch < curBook.chapters.length-1){ TTS.auto = true; go({name:"read", book:view.book, ch:view.ch+1}); }
+      else ttsStop();
+      return;
+    }
+    TTS.parts = ttsSplit(ps[TTS.k].innerText.replace(/\s+/g," ").trim()); TTS.pi = 0; ttsMark();
+    if (!TTS.parts.length){ ttsSpeakNext(); return; }
+  }
+  const u = new SpeechSynthesisUtterance(TTS.parts[TTS.pi]);
+  u.lang = "ru-RU"; u.rate = TTS.rate; try{ if (TTS.voice) u.voice = TTS.voice; }catch(e){}
+  u.onend = ()=>{ TTS.pi++; ttsSpeakNext(); };
+  u.onerror = (e)=>{ if (e.error==="interrupted"||e.error==="canceled") return; TTS.pi++; ttsSpeakNext(); };
+  speechSynthesis.speak(u);
+}
+function ttsPlayFrom(k){
+  speechSynthesis.cancel();
+  TTS.voice = TTS.voice || ttsVoice();
+  TTS.on = true; TTS.paused = false; TTS.k = k - 1; TTS.parts = []; TTS.pi = 0;
+  clearInterval(TTS.ka); TTS.ka = setInterval(()=>{ if (TTS.on && !TTS.paused && speechSynthesis.paused) speechSynthesis.resume(); }, 5000);
+  ttsBar(); ttsSpeakNext();
+}
+function ttsToggle(){
+  if (!TTS.on){ ttsPlayFrom(ttsStartIndex()); return; }
+  if (TTS.paused){                                   // продолжить с того абзаца, где остановились
+    const k = TTS.k; ttsPlayFrom(k < 0 ? 0 : k);
+  } else { TTS.paused = true; speechSynthesis.cancel(); ttsBar(); }
+}
+function ttsStop(){
+  TTS.on = false; TTS.paused = false; clearInterval(TTS.ka);
+  if (ttsOK) speechSynthesis.cancel();
+  document.querySelectorAll("#page .speaking").forEach(n=>n.classList.remove("speaking"));
+  const b = $("#ttsbar"); if (b) b.remove();
+  const t = $("#ttsb"); if (t) t.classList.remove("on");
+}
+const TTS_RATES = [0.8, 1, 1.25, 1.5, 1.75];
+function ttsBar(){
+  let b = $("#ttsbar");
+  if (!b){ b = h(`<div class="ttsbar" id="ttsbar" role="region" aria-label="Озвучка"></div>`); document.body.appendChild(b); }
+  b.innerHTML = `<button class="tt-play" id="ttp" aria-label="${TTS.paused?"Продолжить":"Пауза"}">${TTS.paused ? "▶" : "❚❚"}</button>
+    <span class="tt-lbl">${TTS.paused ? "Пауза" : "Читаю вслух…"}</span>
+    <button class="tt-rate" id="ttr" title="Скорость">${String(TTS.rate).replace(".",",")}×</button>
+    <button class="tt-x" id="ttx" aria-label="Остановить">✕</button>`;
+  $("#ttp").onclick = ttsToggle;
+  $("#ttx").onclick = ttsStop;
+  $("#ttr").onclick = ()=>{ const i = TTS_RATES.indexOf(TTS.rate); TTS.rate = TTS_RATES[(i+1) % TTS_RATES.length]; store.set("ttsRate", TTS.rate);
+    if (TTS.on && !TTS.paused){ const k = TTS.k; ttsPlayFrom(Math.max(0,k)); } else ttsBar(); };
+  const t = $("#ttsb"); if (t) t.classList.add("on");
+}
+/* нажатие на абзац во время озвучки → читать с него */
+document.addEventListener("dblclick", e=>{
+  if (!TTS.on || view.name!=="read") return;
+  const p = e.target.closest("#page > p"); if (!p) return;
+  const k = ttsParas().indexOf(p); if (k >= 0) ttsPlayFrom(k);
+});
+function ttsAfterRender(){
+  const t = $("#ttsb");
+  if (t){ if (!ttsOK) t.remove(); else { t.onclick = ttsToggle; if (TTS.on) t.classList.add("on"); } }
+  if (TTS.auto){ TTS.auto = false; setTimeout(()=>ttsPlayFrom(0), 400); }
+  else if (TTS.on){ ttsStop(); }
+}
+
 async function renderReader(){
   const meta = BOOKS.find(b=>b.id===view.book);
   app.innerHTML = topbar(meta.title, "Загрузка…",
     `<button class="ib" id="home" title="К списку книг">${ICON.back}<span class="lbl">Книги</span></button>`,
-    `<button class="ib" id="tocb" title="Оглавление">${ICON.list}<span class="lbl">Оглавление</span></button>
+    `<button class="ib" id="ttsb" title="Слушать с этого места"><svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg><span class="lbl">Слушать</span></button>
+     <button class="ib" id="tocb" title="Оглавление">${ICON.list}<span class="lbl">Оглавление</span></button>
      <button class="ib" id="setb" title="Шрифт и тема">${ICON.aa}</button>`) +
     `<main class="reader"><div class="loading">Открываю книгу…</div></main>`;
   $("#home").onclick = ()=>{ store.set("last", null); go({name:"home"}); };
@@ -1760,7 +1868,7 @@ async function renderReader(){
   app.querySelectorAll(".chnav [data-ch]").forEach(b=>b.onclick=()=>go({name:"read", book:view.book, ch:+b.dataset.ch}));
   const th = $("#tohome"); if (th) th.onclick=()=>go({name:"home"});
   if (view.restore){ requestAnimationFrame(()=>{ const pg=$("#page"); window.scrollTo(0, pg.offsetTop + view.restore*pg.offsetHeight - 80); view.restore=0; }); }
-  savePos(); updateProg();
+  savePos(); updateProg(); ttsAfterRender();
 }
 function plateHtml(bookId, title, i){
   const k = plateFor(bookId, title, i), pl = PLATES[k]; if(!pl) return "";
