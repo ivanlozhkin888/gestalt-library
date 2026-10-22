@@ -12,6 +12,7 @@
 .ttsbar .tt-lbl{padding:0 6px;white-space:nowrap;opacity:.85}
 .ttsbar .tt-rate{padding:0 10px;border:1px solid color-mix(in srgb, currentColor 35%, transparent)}
 .ttsbar .tt-x{opacity:.7}
+.btn.lis{margin-left:8px;padding:0;width:42px;height:42px;justify-content:center}.btn.lis svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 </style>
 </head>
 <body>
@@ -1630,7 +1631,7 @@ function renderHome(){
       <div class="info">
         <h2>${b.title}</h2><div class="meta">${b.author} · ${b.meta}</div>
         ${p? `<div class="pbar"><i style="width:${pct}%"></i></div><div class="pnote">Вы прочитали около ${pct}% · «${esc(p.chTitle||"")}»</div>`:""}
-        <button class="btn" data-open="${b.id}">${p? "Продолжить":"Читать"}</button>
+        <button class="btn" data-open="${b.id}">${p? "Продолжить":"Читать"}</button><button class="btn ghost lis" data-listen="${b.id}" title="Слушать с места, где остановились" aria-label="Слушать"><svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></button>
       </div>
     </article>`;
   }).join("");
@@ -1658,6 +1659,7 @@ function renderHome(){
     </footer>
   </main>`;
   app.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openBook(b.dataset.open));
+  app.querySelectorAll("[data-listen]").forEach(b=>{ if (!ttsOK){ b.remove(); return; } b.onclick=()=>{ try{ speechSynthesis.speak(new SpeechSynthesisUtterance(" ")); }catch(e){} TTS.listen = true; openBook(b.dataset.listen); }; });
   app.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go({name:b.dataset.go}));
   drawWord(pickWord());
   app.querySelectorAll("[data-mod]").forEach(b=>b.onclick=()=>showPhoto(MODULES.find(m=>m.n==b.dataset.mod)));
@@ -1819,7 +1821,8 @@ document.addEventListener("dblclick", e=>{
 function ttsAfterRender(){
   const t = $("#ttsb");
   if (t){ if (!ttsOK) t.remove(); else { t.onclick = ttsToggle; if (TTS.on) t.classList.add("on"); } }
-  if (TTS.auto){ TTS.auto = false; setTimeout(()=>ttsPlayFrom(0), 400); }
+  if (TTS.listen){ TTS.listen = false; setTimeout(()=>ttsPlayFrom(ttsStartIndex()), 450); }
+  else if (TTS.auto){ TTS.auto = false; setTimeout(()=>ttsPlayFrom(0), 400); }
   else if (TTS.on){ ttsStop(); }
 }
 
