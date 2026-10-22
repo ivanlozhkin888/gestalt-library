@@ -12,7 +12,7 @@
 .ttsbar .tt-lbl{padding:0 6px;white-space:nowrap;opacity:.85}
 .ttsbar .tt-rate{padding:0 10px;border:1px solid color-mix(in srgb, currentColor 35%, transparent)}
 .ttsbar .tt-x{opacity:.7}
-.btn.lis{margin-left:8px;padding:10px 14px;align-self:stretch;justify-content:center}.btn.lis svg{width:20px;height:20px;margin-block:1.25px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.brow{display:flex;align-items:center;gap:10px}.brow .btn{height:44px;padding-top:0;padding-bottom:0}.btn.lis{width:44px;padding:0;border-radius:50%;justify-content:center;flex:none}.btn.lis svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 </style>
 </head>
 <body>
@@ -1631,7 +1631,7 @@ function renderHome(){
       <div class="info">
         <h2>${b.title}</h2><div class="meta">${b.author} · ${b.meta}</div>
         ${p? `<div class="pbar"><i style="width:${pct}%"></i></div><div class="pnote">Вы прочитали около ${pct}% · «${esc(p.chTitle||"")}»</div>`:""}
-        <button class="btn" data-open="${b.id}">${p? "Продолжить":"Читать"}</button><button class="btn ghost lis" data-listen="${b.id}" title="Слушать с места, где остановились" aria-label="Слушать"><svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></button>
+        <div class="brow"><button class="btn" data-open="${b.id}">${p? "Продолжить":"Читать"}</button><button class="btn ghost lis" data-listen="${b.id}" title="Слушать с места, где остановились" aria-label="Слушать"><svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></button></div>
       </div>
     </article>`;
   }).join("");
